@@ -67,7 +67,18 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  else if((r_scause()==13||r_scause()==15))
+  {
+    uint64 fault_va=r_stval();
+    if(fault_va>=p->sz||cowpage(p->pagetable,fault_va)!=0||cowlloc(p->pagetable,PGROUNDDOWN(fault_va))==0)
+    {
+      p->killed=1;
+    }
+    //page error
+    
+  }
+   else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -78,8 +89,20 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  {
+    {
+      if(p->alarm_interval!=0&& --p->alarm_ticks<=0&&p->alarm_goingoff==0)
+      {
+        p->alarm_ticks=p->alarm_interval;
+        *p->alarm_trapframe=*p->trapframe;
+        p->trapframe->epc=(uint64)p->alarm_handler;
+        p->alarm_goingoff=1;
+      }
+    }
     yield();
 
+  }
+   
   usertrapret();
 }
 
@@ -218,3 +241,21 @@ devintr()
   }
 }
 
+int sigalarm(int ticks,void(*handler))
+{
+  struct  proc* p=myproc();
+  p->alarm_interval=ticks;
+  p->alarm_handler=handler;
+  p->alarm_ticks=ticks;
+  return 0;
+
+  
+}
+
+int sigreturn()
+{
+  struct proc *p=myproc();
+  *p->trapframe=*p->alarm_trapframe;
+  p->alarm_goingoff=0;
+  return 0;
+}

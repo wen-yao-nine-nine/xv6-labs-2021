@@ -44,11 +44,20 @@ sys_sbrk(void)
   int addr;
   int n;
 
+
   if(argint(0, &n) < 0)
     return -1;
+
   addr = myproc()->sz;
-  if(growproc(n) < 0)
+  struct proc* p=myproc();
+
+  if(n>0) p->sz+=n;
+  else if(p->sz+n>0)
+    p->sz=uvmdealloc(p->pagetable,p->sz,p->sz+n);
+  else
     return -1;
+
+
   return addr;
 }
 
@@ -57,6 +66,8 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
+
+  backtrace();
 
   if(argint(0, &n) < 0)
     return -1;
@@ -94,4 +105,20 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+
+
+uint64 sys_sigalarm(void)
+{
+  int n;
+  uint64 fn;
+  if(argint(0,&n)<0) return -1;
+  if(argaddr(1,&fn)<0) return -1;
+  return sigalarm(n,(void(*)())(fn));
+}
+
+uint64 sys_sigreturn(void)
+{
+  return sigreturn();
 }
